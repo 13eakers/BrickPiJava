@@ -14,7 +14,6 @@
  */
 package com.ergotech.brickpi;
 
-import com.ergotech.brickpi.sensors.Sensor;
 import com.ergotech.brickpi.sensors.TouchSensor;
 import java.io.IOException;
 import java.util.logging.Level;
@@ -34,22 +33,25 @@ public class BrickPiTests {
         } catch (IOException ex) {
             Logger.getLogger(BrickPiTests.class.getName()).log(Level.SEVERE, null, ex);
         }
-        
+        // add touch sensors to all the ports.
         brickPi.setSensor(new TouchSensor(), 0);
         brickPi.setSensor(new TouchSensor(), 1);
         brickPi.setSensor(new TouchSensor(), 2);
         brickPi.setSensor(new TouchSensor(), 3);
         try {
+            // configure the sensors
             brickPi.setupSensors();
         } catch (IOException ex) {
             Logger.getLogger(BrickPiTests.class.getName()).log(Level.SEVERE, null, ex);
         }
         System.out.println ("Update Values");
        try {
+           // get the updated values.
             brickPi.updateValues();
         } catch (IOException ex) {
             Logger.getLogger(BrickPiTests.class.getName()).log(Level.SEVERE, null, ex);
         }
+       // here're the values
        System.out.println ("Sensors: " + brickPi.getSensor(0).getValue() + " " + brickPi.getSensor(1).getValue() + " "+ brickPi.getSensor(2).getValue() + " "+ brickPi.getSensor(3).getValue());
     } 
 }

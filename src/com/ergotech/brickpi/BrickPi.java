@@ -369,6 +369,9 @@ public class BrickPi {
                 // there are 5 bits associated with each of the encoders
                 // these are then encode word length.
                 int bitLength = 5;
+                // I think that the motor decode method could/should be used to decode these values
+                // problem is that it's encoder0 length, encoder1 length, encoder0 value, encoder1 value
+                // rather than dealing with each encoder as a block.
                 int encoderWordLength0 = decodeInt(bitLength, incoming, startingBitLocation);
                 startingBitLocation += 5;  // skip encoder lengths
                 int encoderWordLength1 = decodeInt(bitLength, incoming, startingBitLocation);
@@ -376,6 +379,8 @@ public class BrickPi {
                 int encoderVal0 = decodeInt(encoderWordLength0, incoming, startingBitLocation);
                 startingBitLocation += encoderWordLength0;
                 int encoderVal1 = decodeInt(encoderWordLength1, incoming, startingBitLocation);
+                // at this point, the encoder values should be associated with the Motor instance
+                // at the appropriate port. 
                 startingBitLocation += encoderWordLength1;
                 for (int sensorCount = 0; sensorCount < 2; sensorCount++) {
                     Sensor currentSensor = sensorType[counter * 2 + sensorCount];
