@@ -29,7 +29,7 @@ public class TouchSensor extends Sensor {
     }
 
     @Override
-    public int decodeValues(BitSet message, int startLocation) {
+    public int decodeValues(byte[] message, int startLocation) {
         set = (BrickPi.decodeInt(1, message, startLocation++) != 0);
         return startLocation;
     }

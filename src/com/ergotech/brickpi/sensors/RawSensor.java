@@ -24,7 +24,7 @@ public class RawSensor extends Sensor {
     }
 
     @Override
-    public int decodeValues(BitSet message, int startLocation) {
+    public int decodeValues(byte[] message, int startLocation) {
         value = BrickPi.decodeInt(10, message, startLocation);
         return startLocation + 10;
     }

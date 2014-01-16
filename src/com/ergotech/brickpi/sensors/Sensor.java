@@ -81,7 +81,7 @@ public abstract class Sensor {
      * @return the ending location. That is the startLocation for the next
      * encoding.
      */
-    public abstract int decodeValues(BitSet message, int startLocation);
+    public abstract int decodeValues(byte[] message, int startLocation);
 
     /**
      * Returns the current value.

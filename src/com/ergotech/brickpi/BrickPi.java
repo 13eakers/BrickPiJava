@@ -26,6 +26,11 @@ import java.util.logging.Logger;
 public class BrickPi {
 
     /**
+     * The current debug level.
+     */
+    public static int DEBUG_LEVEL = 0;
+
+    /**
      * It would seem to be a desirable, and fairly likely feature that the brick
      * pis could be made stackable. In this case we will have multiple slaves on
      * the serial port. Currently this is not the case and we have only two, but
@@ -83,6 +88,22 @@ public class BrickPi {
     protected Motor[] motors;
 
     /**
+     * The thread that calls "updateValues" frequently. This thread is started
+     * on "setupSensors".
+     */
+    protected Thread updateValuesThread;
+
+    /**
+     * How frequently to call updateValues. This is in milliseconds. A value of
+     * zero (or less) stops the updates. Actually, the thread waits this amount
+     * of time after the previous call before calling again, so the update rate
+     * will be slightly slower by the amount of time it take to complete the
+     * call. Additionally, the thread may be woken up, eg by configuring a motor
+     * to ensure that the value is passed to the BrickPi.
+     */
+    protected volatile int updateDelay;
+
+    /**
      * Return the brick pi singleton.
      *
      * @return the brick pi instance.
@@ -113,6 +134,7 @@ public class BrickPi {
      * SerialPortException
      */
     protected BrickPi() throws IOException {
+        updateDelay = 0;
         try {
             serial = SerialFactory.createInstance();
             //System.out.println ("Port opening... "  + com.pi4j.wiringpi.Serial.serialOpen("/dev/ttyAMA0", 500000));
@@ -133,6 +155,7 @@ public class BrickPi {
         serialAddresses[1] = 2;
         sensorType = new Sensor[SERIAL_TARGETS * 2];
         motors = new Motor[SERIAL_TARGETS * 2];
+        updateDelay = 100;
     }
 
     /**
@@ -154,13 +177,15 @@ public class BrickPi {
         toSend[0] = destinationAddress;
         toSend[1] = (byte) (checksum & 0xFF);  // checksum...
         toSend[2] = (byte) (packet.length & 0xFF);
-        StringBuffer output = new StringBuffer();
-        output.append("Sending");
-        for (byte toAdd : toSend) {
-            output.append(" ");
-            output.append(Integer.toHexString(toAdd & 0xFF));
+        if (DEBUG_LEVEL > 0) {
+            StringBuffer output = new StringBuffer();
+            output.append("Sending");
+            for (byte toAdd : toSend) {
+                output.append(" ");
+                output.append(Integer.toHexString(toAdd & 0xFF));
+            }
+            System.out.println(output.toString());
         }
-        System.out.println(output.toString());
         serial.write(toSend);
         //serial.write(packet);
     }
@@ -212,21 +237,23 @@ public class BrickPi {
 
         byte[] packet = new byte[packetSize];
         for (int counter = 0; counter < packetSize; counter++) {
-            packet[counter] = (byte) serial.read();
+            packet[counter] = (byte) (serial.read() & 0xFF);
             inCheck += (int) (packet[counter] & 0xFF);
         }
-        StringBuffer input = new StringBuffer();
-        input.append("Received ");
-        input.append(Integer.toHexString(checksum & 0xFF));
-        input.append(" ");
-        input.append(Integer.toHexString(packetSize & 0xFF));
-        for (byte received : packet) {
+        if (DEBUG_LEVEL > 0) {
+            StringBuffer input = new StringBuffer();
+            input.append("Received ");
+            input.append(Integer.toHexString(checksum & 0xFF));
             input.append(" ");
-            input.append(Integer.toHexString(received & 0xFF));
+            input.append(Integer.toHexString(packetSize & 0xFF));
+            for (byte received : packet) {
+                input.append(" ");
+                input.append(Integer.toHexString(received & 0xFF));
+            }
+            System.out.println(input.toString());
         }
-        System.out.println(input.toString());
 
-        if ((inCheck & 0xFF) != checksum) {
+        if ((inCheck & 0xFF) != (checksum & 0xFF)) {
             throw new IOException("Bad Checksum " + inCheck + " expected " + checksum);
         }
         // if we get to here, all is well.
@@ -254,6 +281,20 @@ public class BrickPi {
     }
 
     /**
+     * Returns the current update delay.
+     */
+    public int getUpdateDelay() {
+        return updateDelay;
+    }
+
+    /**
+     * Sets the current update delay.
+     */
+    public void setUpdateDelay(int updateDelay) {
+        this.updateDelay = updateDelay;
+    }
+
+    /**
      * Set the sensor at the particular port. There are current four sensor
      * ports.
      *
@@ -268,7 +309,7 @@ public class BrickPi {
 
     /**
      * Returns the sensor attached to a particular port. This method will not
-     * return null. It a sensor has not previously been attached to the port, a
+     * return null. If a sensor has not previously been attached to the port, a
      * RawSensor will be created, attached and returned.
      *
      * @param port the port associated with the requested sensor.
@@ -280,6 +321,29 @@ public class BrickPi {
             sensorType[port] = new RawSensor();
         }
         return sensorType[port];
+    }
+
+    /**
+     * Set the motor at the particular port. There are current four motor ports.
+     *
+     * @param motor the motor to associate with the port. May be null to clear
+     * the motor configuration.
+     * @param port the port. This, currently, should be 0-3. Values outside that
+     * range will throw an IndexOutOfBoundsException.
+     */
+    public void setMotor(Motor motor, int port) {
+        motors[port] = motor;
+    }
+
+    /**
+     * Returns the motor attached to a particular port. This method may return
+     * null.
+     *
+     * @param port the port associated with the requested motor.
+     * @return a valid motor object or null
+     */
+    public Motor getMotor(int port) {
+        return motors[port];
     }
 
     /**
@@ -316,7 +380,42 @@ public class BrickPi {
                 }
             }
             serialTransactionWithRetry(counter, packet, 2500);
+            // should probably check the response here...
         }
+        // set up the polling thread
+        if (updateDelay > 0 && updateValuesThread == null) {
+            Runnable update = new Runnable() {
+
+                @Override
+                public void run() {
+                    try {
+                        while (updateDelay > 0) {
+                            try {
+                                updateValues();
+                                synchronized (BrickPi.this) {
+                                    BrickPi.this.wait(updateDelay);
+                                }
+                            } catch (ThreadDeath td) {
+                                throw td;  // don't know whether this is still required by Java - used to be.
+                            } catch (Throwable any) {
+                                Logger.getLogger(BrickPi.class.getName()).log(Level.SEVERE, null, any);
+                            }
+                        }  // end of while
+                    } finally {
+                        updateValuesThread = null;  // reset this so that the thread can be restarted in the future.
+                    }
+                }
+
+            };
+            updateValuesThread = new Thread(update, "Update Values Thread");
+            // not sure about this.  If it's daemon then when the application exits
+            // this thread will also exit.
+            // If it's not deamon, then it can be used to keep the application running
+            // which means that no other thread needs to do this.
+            updateValuesThread.setDaemon(true);
+            updateValuesThread.start();
+        }
+
     }
 
     /**
@@ -338,7 +437,7 @@ public class BrickPi {
                 Motor motor = motors[counter * 2 + motorCount];
                 if (motor != null) {
                     // request that each motor encode itself into the packet.
-                    motor.encodeToValueRequest(pollingData, startingBitLocation);
+                    startingBitLocation = motor.encodeToValueRequest(pollingData, startingBitLocation);
                 } else {
                     // we have to encode 10 bits of zero.
                     pollingData.clear(startingBitLocation, startingBitLocation + 10);
@@ -349,7 +448,7 @@ public class BrickPi {
                 Sensor currentSensor = sensorType[counter * 2 + sensorCount];
                 if (currentSensor != null) {
                     // request that each sensor encode itself into the packet.
-                    currentSensor.encodeToValueRequest(pollingData, startingBitLocation);
+                    startingBitLocation = currentSensor.encodeToValueRequest(pollingData, startingBitLocation);
                 }
             }
             byte[] pollingBytes = pollingData.toByteArray();
@@ -362,9 +461,16 @@ public class BrickPi {
             packet = new byte[pollingBytes.length + 1];
             System.arraycopy(pollingBytes, 0, packet, 1, pollingBytes.length);
             packet[0] = MSG_TYPE_VALUES;
-            byte[] values = serialTransactionWithRetry(counter, packet, 2500);
+            byte[] values = serialTransactionWithRetry(counter, packet, 50);
+//            if (values != null) {
+//                 
+//                values = new byte[]{(byte) 0x3 , (byte) 0x74 , (byte) 0x10 , (byte) 0xc , (byte) 0x20 , (byte) 0xfd , (byte) 0xf7 , (byte) 0x1f};
+//            Gives: BrickPi.Temp_BitsUsed[0]: 20 BrickPi.Temp_BitsUsed[1]: 3
+//            Gives:  Temp_EncoderVal: 525060 [0]
+//            Gives:  Temp_EncoderVal: 4 [1]
+//            }
             if (values[0] == MSG_TYPE_VALUES) { // hard to think it would be anything else
-                BitSet incoming = BitSet.valueOf(values);
+                //BitSet incoming = BitSet.valueOf(values);
                 startingBitLocation = 8; // the message type is still in there, so forget that
                 // there are 5 bits associated with each of the encoders
                 // these are then encode word length.
@@ -372,24 +478,34 @@ public class BrickPi {
                 // I think that the motor decode method could/should be used to decode these values
                 // problem is that it's encoder0 length, encoder1 length, encoder0 value, encoder1 value
                 // rather than dealing with each encoder as a block.
-                int encoderWordLength0 = decodeInt(bitLength, incoming, startingBitLocation);
+                int encoderWordLength0 = decodeInt(bitLength, values, startingBitLocation);
                 startingBitLocation += 5;  // skip encoder lengths
-                int encoderWordLength1 = decodeInt(bitLength, incoming, startingBitLocation);
+                int encoderWordLength1 = decodeInt(bitLength, values, startingBitLocation);
                 startingBitLocation += 5;  // skip encoder lengths
-                int encoderVal0 = decodeInt(encoderWordLength0, incoming, startingBitLocation);
+                Motor motor = getMotor(counter * 2);
+                if (motor != null) {
+                    motor.decodeValues(encoderWordLength0, values, startingBitLocation);
+                }
+                //int encoderVal0 = decodeInt(encoderWordLength0, incoming, startingBitLocation);
                 startingBitLocation += encoderWordLength0;
-                int encoderVal1 = decodeInt(encoderWordLength1, incoming, startingBitLocation);
-                // at this point, the encoder values should be associated with the Motor instance
-                // at the appropriate port. 
-                startingBitLocation += encoderWordLength1;
-                for (int sensorCount = 0; sensorCount < 2; sensorCount++) {
-                    Sensor currentSensor = sensorType[counter * 2 + sensorCount];
-                    if (currentSensor != null) {
-                        // request that each sensor encode itself into the packet.
-                        currentSensor.encodeToValueRequest(pollingData, startingBitLocation);
-                    } else {
-                        startingBitLocation+= 10;  // the default seems to be 10 bits....
+                motor = getMotor(counter * 2 + 1);
+                if (motor != null) {
+                    motor.decodeValues(encoderWordLength1, values, startingBitLocation);
+                }
+                try {
+                    //int encoderVal1 = decodeInt(encoderWordLength1, incoming, startingBitLocation);
+                    startingBitLocation += encoderWordLength1;
+                    for (int sensorCount = 0; sensorCount < 2; sensorCount++) {
+                        Sensor currentSensor = sensorType[counter * 2 + sensorCount];
+                        if (currentSensor != null) {
+                            // request that each sensor encode itself into the packet.
+                            currentSensor.decodeValues(values, startingBitLocation);
+                        } else {
+                            startingBitLocation += 10;  // the default seems to be 10 bits....
+                        }
                     }
+                } catch (Exception e) {
+                    e.printStackTrace();
                 }
             }
         }
@@ -404,14 +520,15 @@ public class BrickPi {
      * @param startingBitLocation the starting bit location in the bitset
      * @return the decoded value
      */
-    public static int decodeInt(int bitLength, BitSet incoming, int startingBitLocation) {
+    public static int decodeInt(int bitLength, byte[] incoming, int startingBitLocation) {
         int value = 0;
         while (bitLength-- > 0) {
-            boolean set = incoming.get(bitLength + startingBitLocation);
+            value <<= 1;
+            int location = bitLength + startingBitLocation;
+            boolean set = ((incoming[location / 8] & (1 << (location % 8))) != 0);
             if (set) {
                 value |= 1;
             }
-            value <<= 1;
         }
         return value;
     }

@@ -22,7 +22,7 @@ public class I2CSensor extends Sensor {
     }
 
     @Override
-    public int decodeValues(BitSet message, int startLocation) {
+    public int decodeValues(byte[] message, int startLocation) {
         throw new UnsupportedOperationException("Not supported yet."); //To change body of generated methods, choose Tools | Templates.
     }
     
