@@ -534,7 +534,9 @@ public class BrickPi {
     }
 
     /**
-     * Send the packet to the BrickPi. This will retry up to five times.
+     * Send the packet to the BrickPi. This will retry up to five times.  This method is 
+     * synchronized to prevent multiple threads from attempting to use the serial
+     * interface simultaneously.
      *
      * @param addressPointer the index into the serialAddresses array
      * @param packet the packet to send
@@ -542,7 +544,7 @@ public class BrickPi {
      * @return the received packet
      * @throws IOException throw if anything goes wrong.
      */
-    protected byte[] serialTransactionWithRetry(int addressPointer, byte[] packet, int timeout) throws IOException {
+    protected synchronized byte[] serialTransactionWithRetry(int addressPointer, byte[] packet, int timeout) throws IOException {
         byte[] response;
         // this is ridiculous.  The serial interface should be, basically 100% reliable
         // it's inexcusable to have to add retry-hacks.

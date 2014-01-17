@@ -55,19 +55,20 @@ public class BrickPiTests {
         System.out.println("Sensors: " + brickPi.getSensor(0).getValue() + " " + brickPi.getSensor(1).getValue() + " " + brickPi.getSensor(2).getValue() + " " + brickPi.getSensor(3).getValue());
 
         Motor motor = new Motor();
-        motor.setCommandedSpeed(0);
+        motor.setCommandedOutput(0);
         motor.setEnabled(true);
+        motor.resetEncoder();
         brickPi.setMotor(motor, 0);
-        motor.setCommandedSpeed(200);
+        motor.setCommandedOutput(25);
         for (int counter = 0; counter < 50; counter++) {
             try {
-                System.out.println("Forward Motors: Speed " + brickPi.getMotor(0).getCurrentSpeed() + " encoder " + brickPi.getMotor(0).getCurrentEncoderValue() );
+                System.out.println("Forward Motors: Speed " + brickPi.getMotor(0).getCurrentSpeed() + " encoder " + brickPi.getMotor(0).getCurrentEncoderValue()  + " Time " + System.currentTimeMillis() %10000);
                 Thread.sleep(200);
             } catch (InterruptedException ex) {
                 // ignore
             }
         }
-        motor.setCommandedSpeed(-200);
+        motor.setCommandedOutput(-25);
         for (int counter = 0; counter < 50; counter++) {
             try {
                 Thread.sleep(200);
@@ -76,7 +77,7 @@ public class BrickPiTests {
                 // ignore
             }
         }
-        motor.setCommandedSpeed(0);
+        motor.setCommandedOutput(0);
         motor.setEnabled(false);
         try {
             // get the updated values.
