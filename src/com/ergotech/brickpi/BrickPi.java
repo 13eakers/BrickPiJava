@@ -312,15 +312,16 @@ public class BrickPi {
      * return null. If a sensor has not previously been attached to the port, a
      * RawSensor will be created, attached and returned.
      *
+     * @param <T> the sensor associated with the port
      * @param port the port associated with the requested sensor.
      * @return a valid Sensor object. If no sensor is current associated with
      * the port a RawSensor will be returned.
      */
-    public Sensor getSensor(int port) {
+    public <T extends Sensor> T getSensor(int port) {
         if (sensorType[port] == null) {
             sensorType[port] = new RawSensor();
         }
-        return sensorType[port];
+        return (T)sensorType[port];
     }
 
     /**
