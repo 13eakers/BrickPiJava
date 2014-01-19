@@ -13,12 +13,12 @@ import com.ergotech.brickpi.BrickPi;
 /**
  * Representation of a Touch Sensor.
  */
-public class RawSensor extends Sensor {
+public class LightSensorOff extends Sensor {
 
     /**
      * Returns an instance of this sensor.
      */
-    public RawSensor() {
+    public LightSensorOff() {
 
     }
 
@@ -30,7 +30,7 @@ public class RawSensor extends Sensor {
 
     @Override
     public byte getSensorType() {
-        return TYPE_SENSOR_RAW;
+        return TYPE_SENSOR_LIGHT_OFF;
     }
 
 }

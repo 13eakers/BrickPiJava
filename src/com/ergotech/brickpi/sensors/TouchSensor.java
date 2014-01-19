@@ -9,7 +9,6 @@
 package com.ergotech.brickpi.sensors;
 
 import com.ergotech.brickpi.BrickPi;
-import java.util.BitSet;
 
 /**
  * Representation of a Touch Sensor.

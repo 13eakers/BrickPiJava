@@ -13,24 +13,24 @@ import com.ergotech.brickpi.BrickPi;
 /**
  * Representation of a Touch Sensor.
  */
-public class RawSensor extends Sensor {
+public class UltraSonicSensorSS extends Sensor {
 
     /**
      * Returns an instance of this sensor.
      */
-    public RawSensor() {
+    public UltraSonicSensorSS() {
 
     }
 
     @Override
     public int decodeValues(byte[] message, int startLocation) {
-        value = BrickPi.decodeInt(10, message, startLocation);
-        return startLocation + 10;
+        value = BrickPi.decodeInt(8, message, startLocation);
+        return startLocation + 8;
     }
 
     @Override
     public byte getSensorType() {
-        return TYPE_SENSOR_RAW;
+        return TYPE_SENSOR_ULTRASONIC_SS;
     }
 
 }
