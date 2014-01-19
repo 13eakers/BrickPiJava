@@ -500,7 +500,7 @@ public class BrickPi {
                         Sensor currentSensor = sensorType[counter * 2 + sensorCount];
                         if (currentSensor != null) {
                             // request that each sensor encode itself into the packet.
-                            currentSensor.decodeValues(values, startingBitLocation);
+                           startingBitLocation= currentSensor.decodeValues(values, startingBitLocation);
                         } else {
                             startingBitLocation += 10;  // the default seems to be 10 bits....
                         }
